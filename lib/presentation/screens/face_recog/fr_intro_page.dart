@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 
-// Renamed to match MainScreen usage
 class FacialRecognitionPage extends StatelessWidget {
   const FacialRecognitionPage({super.key});
 
@@ -53,7 +52,6 @@ class FacialRecognitionPage extends StatelessWidget {
               FRMainButton(
                 label: "Start Scanning",
                 onTap: () {
-                  // Standard Flutter Navigation
                   Navigator.push(context, MaterialPageRoute(builder: (_) => FRScanPage()));
                 },
               ),
