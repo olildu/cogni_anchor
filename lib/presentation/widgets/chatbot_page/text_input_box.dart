@@ -16,10 +16,14 @@ class TextInputBox extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20.r),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+              boxShadow: const [
+                BoxShadow(
+                    color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))
+              ],
             ),
             child: const TextField(
-              decoration: InputDecoration(border: InputBorder.none, hintText: "How can I help?"),
+              decoration: InputDecoration(
+                  border: InputBorder.none, hintText: "How can I help?"),
             ),
           ),
         ),
@@ -27,7 +31,8 @@ class TextInputBox extends StatelessWidget {
         Container(
           width: 50.w,
           height: 50.w,
-          decoration: BoxDecoration(color: colors.appColor, shape: BoxShape.circle),
+          decoration:
+              BoxDecoration(color: colors.appColor, shape: BoxShape.circle),
           child: const Icon(Icons.send, color: Colors.white),
         ),
       ],

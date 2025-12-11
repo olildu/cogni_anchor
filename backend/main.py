@@ -3,18 +3,22 @@ from pydantic import BaseModel
 from typing import List
 import psycopg2
 import numpy as np
+import os
 
 app = FastAPI()
 
 # ---- DATABASE CONNECTION ----
+
 def get_conn():
     return psycopg2.connect(
-        host="localhost",
-        port="5433",  # IMPORTANT: your database runs on 5433 now
-        database="face_db",
-        user="postgres",
-        password="Gettowork123#"
+        host=os.environ["PGHOST"],
+        port=os.environ["PGPORT"],
+        database=os.environ["PGDATABASE"],
+        user=os.environ["PGUSER"],
+        password=os.environ["PGPASSWORD"],
+        sslmode="require"
     )
+
 
 # ---- DATA MODELS ----
 class EnrollRequest(BaseModel):

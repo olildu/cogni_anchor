@@ -8,7 +8,11 @@ class ToggleButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const ToggleButton({super.key, required this.label, required this.selected, required this.onTap});
+  const ToggleButton(
+      {super.key,
+      required this.label,
+      required this.selected,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +24,19 @@ class ToggleButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? colors.appColor : Colors.white,
           borderRadius: BorderRadius.circular(18.r),
-          boxShadow: selected ? [BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 4))] : [],
+          boxShadow: selected
+              ? [
+                  const BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 12,
+                      offset: Offset(0, 4))
+                ]
+              : [],
         ),
-        child: AppText(label, fontSize: 16.sp, color: selected ? Colors.white : Colors.black, fontWeight: FontWeight.w600),
+        child: AppText(label,
+            fontSize: 16.sp,
+            color: selected ? Colors.white : Colors.black,
+            fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -4,15 +4,25 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 
 class EmbeddingService {
   static final EmbeddingService instance = EmbeddingService._internal();
-  late Interpreter _interpreter;
+  Interpreter? _interpreter;
 
   EmbeddingService._internal();
 
   Future<void> loadModel() async {
-    _interpreter = await Interpreter.fromAsset('models/mobilefacenet.tflite');
+    try {
+      _interpreter =
+          await Interpreter.fromAsset('assets/models/mobilefacenet.tflite');
+      print("✅ MobileFaceNet model loaded!");
+    } catch (e) {
+      print("❌ Failed to load model: $e");
+    }
   }
 
   Future<List<double>> getEmbedding(Uint8List imageBytes) async {
+    if (_interpreter == null) {
+      throw Exception("Interpreter not loaded. Call loadModel() first.");
+    }
+
     final image = img.decodeImage(imageBytes)!;
     final resized = img.copyResize(image, width: 112, height: 112);
 
@@ -30,7 +40,7 @@ class EmbeddingService {
 
     final output = List.filled(192, 0.0).reshape([1, 192]);
 
-    _interpreter.run([input], output);
+    _interpreter!.run([input], output);
 
     return List<double>.from(output[0]);
   }

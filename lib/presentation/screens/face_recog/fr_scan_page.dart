@@ -13,6 +13,7 @@ import 'package:cogni_anchor/main.dart';
 import 'package:cogni_anchor/presentation/widgets/face_recog/fr_components.dart';
 import 'package:cogni_anchor/services/face_crop_service.dart';
 import 'package:cogni_anchor/services/embedding_service.dart';
+import 'package:cogni_anchor/config/api_config.dart';
 
 class RecognitionResult {
   final bool matchFound;
@@ -31,8 +32,7 @@ class FRScanPage extends StatefulWidget {
 }
 
 class _FRScanPageState extends State<FRScanPage> {
-  static const String _baseUrl =
-      'https://eaa9e7cf9c64.ngrok-free.app/api/v1/faces/recognize';
+  static final String _baseUrl = ApiConfig.recognize;
 
   late CameraController _cameraController;
   bool _isCameraInitialized = false;

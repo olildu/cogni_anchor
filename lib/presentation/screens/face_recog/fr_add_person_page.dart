@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
 import 'package:http/http.dart' as http;
-
+import 'package:cogni_anchor/config/api_config.dart';
 import 'package:cogni_anchor/services/embedding_service.dart';
 import 'package:cogni_anchor/services/face_crop_service.dart';
 
@@ -23,7 +23,7 @@ class FRAddPersonPage extends StatefulWidget {
 }
 
 class _FRAddPersonPageState extends State<FRAddPersonPage> {
-  static const String _baseUrl = "http://10.0.2.2:8000/api/v1/faces/enroll";
+  static final String _baseUrl = ApiConfig.enroll;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _relationshipController = TextEditingController();

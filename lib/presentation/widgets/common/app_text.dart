@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppText extends StatelessWidget {
   final String text;
@@ -43,7 +42,7 @@ class AppText extends StatelessWidget {
         fontWeight: fontWeight,
         letterSpacing: letterSpacing,
         decoration: decoration,
-        fontFamily: GoogleFonts.poppins().fontFamily,
+        fontFamily: TextStyle().fontFamily,
         fontStyle: fontStyle,
       ),
     );
