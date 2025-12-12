@@ -3,12 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class FRResultFoundPage extends StatelessWidget {
-  final RecognizedPerson person;
+  final Map<String, dynamic> person;
 
   const FRResultFoundPage({super.key, required this.person});
 
   @override
   Widget build(BuildContext context) {
+    final name = person['name'] ?? 'Unknown';
+    final relationship = person['relationship'] ?? '';
+    final occupation = person['occupation'] ?? '';
+    final age = person['age']?.toString() ?? '';
+    final notes = person['notes'] ?? '';
+    final imageUrl = person['image_url'] ?? '';
+
+    // FRPersonCard likely accepts RecognizedPerson; the existing FRPersonCard
+    // component may expect a specific type. If it accepts a simple object,
+    // you can use it; otherwise, use your own layout below.
     return Scaffold(
       body: Stack(
         children: [
@@ -45,7 +55,49 @@ class FRResultFoundPage extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.center,
-            child: FRPersonCard(person: person),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
+              child: Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16.r)),
+                child: Padding(
+                  padding: EdgeInsets.all(16.w),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (imageUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12.r),
+                          child: Image.network(
+                            imageUrl,
+                            width: 220.w,
+                            height: 220.w,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      SizedBox(height: 12.h),
+                      Text(name,
+                          style: TextStyle(
+                              fontSize: 20.sp, fontWeight: FontWeight.bold)),
+                      SizedBox(height: 6.h),
+                      Text(relationship, style: TextStyle(fontSize: 16.sp)),
+                      SizedBox(height: 6.h),
+                      Text("$occupation, Age $age",
+                          style: TextStyle(
+                              fontSize: 14.sp, color: Colors.grey[700])),
+                      SizedBox(height: 10.h),
+                      if (notes.isNotEmpty)
+                        Text(notes, style: TextStyle(fontSize: 12.sp)),
+                      SizedBox(height: 14.h),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Close"),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

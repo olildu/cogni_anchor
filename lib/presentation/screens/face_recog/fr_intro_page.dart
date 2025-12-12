@@ -6,6 +6,7 @@ import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:cogni_anchor/presentation/widgets/face_recog/fr_components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:cogni_anchor/presentation/screens/face_recog/fr_people_list_page.dart';
 import 'package:gap/gap.dart';
 
 class FacialRecognitionPage extends StatefulWidget {
@@ -58,18 +59,20 @@ class _FacialRecognitionPageState extends State<FacialRecognitionPage>
     );
   }
 
-  void _onRemovePersonTap() {
-    _closeFabMenu();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Remove person coming soon")));
-  }
-
   void _onEditDetailsTap() {
     _closeFabMenu();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Edit details coming soon")));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => const FRPeopleListPage(forEditing: true)));
+  }
+
+  void _onRemovePersonTap() {
+    _closeFabMenu();
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => const FRPeopleListPage(forEditing: false)));
   }
 
   @override
@@ -132,7 +135,7 @@ class _FacialRecognitionPageState extends State<FacialRecognitionPage>
 
                   // More symmetrical spacing above FAB
                   Padding(
-                    padding: EdgeInsets.only(bottom: 115.h), // REDUCED SPACE
+                    padding: EdgeInsets.only(bottom: 110.h), // REDUCED SPACE
                     child: FRMainButton(
                       label: "Start Scanning",
                       onTap: () {
@@ -180,7 +183,7 @@ class _FacialRecognitionPageState extends State<FacialRecognitionPage>
 
           // --- EXPANDABLE FAB ---
           Positioned(
-            bottom: 35.h, // Lift FAB slightly
+            bottom: 30.h, // Lift FAB slightly
             right: 20.w,
             child: _ExpandableFAB(
               animationController: _fabAnimController,
