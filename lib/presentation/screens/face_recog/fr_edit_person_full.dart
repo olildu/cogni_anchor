@@ -102,33 +102,28 @@ class _FREditPersonFullPageState extends State<FREditPersonFullPage> {
 
     return Scaffold(
       // ---------------------- UPDATED APPBAR ----------------------
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(75), // Increased height
-        child: AppBar(
-          backgroundColor: colors.appColor,
-          elevation: 0,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(22), // Rounded bottom corners
-            ),
+      appBar: AppBar(
+        toolbarHeight: 75, // keeps vertical centering correct
+        backgroundColor: colors.appColor,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(22),
           ),
-          title: const Text(
-            "Edit Person",
-            style: TextStyle(
-              color: Colors.white, // White text
-              fontWeight: FontWeight.w600,
-            ),
+        ),
+        title: const Text(
+          "Edit Person",
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
           ),
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back,
-              color: Colors.white, // White back arrow
-            ),
-            onPressed: () => Navigator.pop(context),
+        ),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
           ),
-
-          // No save button on the right (as requested earlier)
-          actions: [],
+          onPressed: () => Navigator.pop(context),
         ),
       ),
 

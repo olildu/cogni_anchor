@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -26,112 +27,132 @@ class _FRScanPageState extends State<FRScanPage> {
   bool _isCameraInitialized = false;
   bool _isScanning = true;
 
+  CameraLensDirection _currentLens = CameraLensDirection.front;
+  bool _foundFace = false;
+  Timer? _scanTimeoutTimer;
+
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+    _initializeCamera(_currentLens);
   }
 
-  Future<void> _initializeCamera() async {
-    final frontCamera = cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
+  Future<void> _initializeCamera(CameraLensDirection lens) async {
+    final camera = cameras.firstWhere(
+      (cam) => cam.lensDirection == lens,
       orElse: () => cameras.first,
     );
 
     _cameraController = CameraController(
-      frontCamera,
+      camera,
       ResolutionPreset.medium,
       enableAudio: false,
     );
 
     try {
       await _cameraController.initialize();
+
       if (mounted) {
         setState(() {
           _isCameraInitialized = true;
+          _isScanning = true;
         });
 
-        // start one scan
-        _scanFace();
+        _startScanWindow();
       }
     } catch (e) {
-      debugPrint("Error initializing camera: $e");
+      debugPrint("Camera init error: $e");
+      _goToNotFound();
+    }
+  }
 
-      if (mounted) {
+  /// Starts 10-second scan window
+  void _startScanWindow() {
+    _foundFace = false;
+
+    // Start continuous scanning
+    _scanFaceLoop();
+
+    // After 10 seconds, if nothing found → Not Found
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (!_foundFace && mounted) {
+        _goToNotFound();
+      }
+    });
+  }
+
+  /// Continuously attempts scan until found or timeout
+  Future<void> _scanFaceLoop() async {
+    while (!_foundFace && mounted) {
+      await _scanFaceOnce();
+      await Future.delayed(const Duration(milliseconds: 800));
+    }
+  }
+
+  Future<void> _scanFaceOnce() async {
+    try {
+      final xFile = await _cameraController.takePicture();
+      final imageFile = File(xFile.path);
+
+      final croppedFace =
+          await FaceCropService.instance.detectAndCropFace(imageFile);
+
+      if (croppedFace == null) return;
+
+      final faceBytes = await croppedFace.readAsBytes();
+      final embedding = await EmbeddingService.instance.getEmbedding(faceBytes);
+
+      final result = await ApiService.scanPerson(embedding: embedding);
+
+      if (result['matched'] == true && mounted) {
+        _foundFace = true;
+        _scanTimeoutTimer?.cancel();
+
+        final person = result['person'] as Map<String, dynamic>;
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()),
+          MaterialPageRoute(
+            builder: (_) => FRResultFoundPage(person: person),
+          ),
         );
       }
+    } catch (e) {
+      debugPrint("Scan attempt error: $e");
     }
+  }
+
+  void _goToNotFound() {
+    _scanTimeoutTimer?.cancel();
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()),
+      );
+    }
+  }
+
+  /// Flip camera front ↔ back
+  Future<void> _flipCamera() async {
+    _scanTimeoutTimer?.cancel();
+    await _cameraController.dispose();
+
+    setState(() {
+      _isCameraInitialized = false;
+      _currentLens = _currentLens == CameraLensDirection.front
+          ? CameraLensDirection.back
+          : CameraLensDirection.front;
+    });
+
+    await _initializeCamera(_currentLens);
   }
 
   @override
   void dispose() {
+    _scanTimeoutTimer?.cancel();
     _cameraController.dispose();
     super.dispose();
-  }
-
-  Future<void> _scanFace() async {
-    setState(() => _isScanning = true);
-
-    try {
-      // 1) capture image
-      final xFile = await _cameraController.takePicture();
-      final imageFile = File(xFile.path);
-
-      // 2) crop face
-      final croppedFace =
-          await FaceCropService.instance.detectAndCropFace(imageFile);
-
-      if (croppedFace == null) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()),
-          );
-        }
-        return;
-      }
-
-      // 3) embedding
-      final faceBytes = await croppedFace.readAsBytes();
-      final embedding = await EmbeddingService.instance.getEmbedding(faceBytes);
-
-      // 4) backend check
-      final result = await ApiService.scanPerson(embedding: embedding);
-
-      if (result['matched'] == true) {
-        final person = result['person'] as Map<String, dynamic>;
-
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => FRResultFoundPage(person: person),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint("❌ Error scanning face: $e");
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isScanning = false);
-    }
   }
 
   @override
@@ -147,7 +168,6 @@ class _FRScanPageState extends State<FRScanPage> {
 
     final size = MediaQuery.of(context).size;
     var scale = size.aspectRatio * _cameraController.value.aspectRatio;
-
     if (scale < 1) scale = 1 / scale;
 
     return Scaffold(
@@ -185,19 +205,14 @@ class _FRScanPageState extends State<FRScanPage> {
                   width: 280.w,
                   height: 350.h,
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color: colors.appColor,
-                      width: 3,
-                    ),
+                    border: Border.all(color: colors.appColor, width: 3),
                     borderRadius: BorderRadius.circular(20.r),
                   ),
                 ),
                 Gap(20.h),
                 Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 20.w,
-                    vertical: 15.h,
-                  ),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 20.w, vertical: 15.h),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16.r),
@@ -206,17 +221,11 @@ class _FRScanPageState extends State<FRScanPage> {
                     children: [
                       Icon(Icons.camera, color: colors.appColor),
                       Gap(5.h),
-                      _isScanning
-                          ? AppText(
-                              "Scanning face...",
-                              fontSize: 12.sp,
-                              color: colors.appColor,
-                            )
-                          : AppText(
-                              "Ready to scan",
-                              fontSize: 12.sp,
-                              color: Colors.grey,
-                            ),
+                      AppText(
+                        "Scanning face...",
+                        fontSize: 12.sp,
+                        color: colors.appColor,
+                      ),
                     ],
                   ),
                 ),
@@ -224,18 +233,11 @@ class _FRScanPageState extends State<FRScanPage> {
             ),
           ),
 
-          /// BOTTOM BUTTONS
+          /// FLIP CAMERA BUTTON (BOTTOM RIGHT)
           Positioned(
             bottom: 40.h,
-            left: 20.w,
             right: 20.w,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _circleBtn(Icons.flashlight_on_outlined),
-                _circleBtn(Icons.image_outlined),
-              ],
-            ),
+            child: _circleBtn(Icons.cameraswitch, _flipCamera),
           ),
 
           /// BACK BUTTON
@@ -252,15 +254,18 @@ class _FRScanPageState extends State<FRScanPage> {
     );
   }
 
-  Widget _circleBtn(IconData icon) {
-    return Container(
-      width: 50.w,
-      height: 50.w,
-      decoration: const BoxDecoration(
-        color: Colors.white24,
-        shape: BoxShape.circle,
+  Widget _circleBtn(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 50.w,
+        height: 50.w,
+        decoration: const BoxDecoration(
+          color: Colors.white24,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white),
       ),
-      child: Icon(icon, color: Colors.white),
     );
   }
 }

@@ -134,7 +134,15 @@ class _FRPeopleListPageState extends State<FRPeopleListPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                     ),
-                    child: const Text("Yes, Delete"),
+                    child: const Center(
+                      child: Text(
+                        "Yes, Delete",
+                        maxLines: 1, // 👈 FORCE single line
+                        softWrap: false, // 👈 NO wrapping
+                        overflow: TextOverflow.visible,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -198,31 +206,29 @@ class _FRPeopleListPageState extends State<FRPeopleListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ------------------ UPDATED APPBAR ------------------
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(75), // Increased height
-        child: AppBar(
-          backgroundColor: colors.appColor,
-          elevation: 0,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(22), // same roundness
-            ),
+      appBar: AppBar(
+        toolbarHeight: 75, // keeps vertical centering correct
+        backgroundColor: colors.appColor,
+        elevation: 0,
+        // ❌ remove centerTitle
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            bottom: Radius.circular(22),
           ),
-          title: Text(
-            widget.forEditing ? "Edit Person" : "Remove Person",
-            style: const TextStyle(
-              color: Colors.white, // Title text → white
-              fontWeight: FontWeight.w600,
-            ),
+        ),
+        title: Text(
+          widget.forEditing ? "Edit Person" : "Remove Person",
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
           ),
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back,
-              color: Colors.white, // Back arrow → white
-            ),
-            onPressed: () => Navigator.pop(context),
+        ),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
           ),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: loading

@@ -62,43 +62,47 @@ class _FacialRecognitionPageState extends State<FacialRecognitionPage>
   void _onEditDetailsTap() {
     _closeFabMenu();
     Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => const FRPeopleListPage(forEditing: true)));
+      context,
+      MaterialPageRoute(
+        builder: (_) => const FRPeopleListPage(forEditing: true),
+      ),
+    );
   }
 
   void _onRemovePersonTap() {
     _closeFabMenu();
     Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (_) => const FRPeopleListPage(forEditing: false)));
+      context,
+      MaterialPageRoute(
+        builder: (_) => const FRPeopleListPage(forEditing: false),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(70.h),
-        child: AppBar(
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          backgroundColor: colors.appColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(20.r),
-              bottomRight: Radius.circular(20.r),
+    return Stack(
+      children: [
+        // ================= MAIN SCREEN =================
+        Scaffold(
+          appBar: PreferredSize(
+            preferredSize: Size.fromHeight(70.h),
+            child: AppBar(
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              backgroundColor: colors.appColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(20.r),
+                  bottomRight: Radius.circular(20.r),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // --- MAIN BODY ---
-          SafeArea(
+          backgroundColor: Colors.white,
+          body: SafeArea(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(20.w, 5.h, 20.w, 0), // SHIFT UP
+              padding: EdgeInsets.fromLTRB(20.w, 5.h, 20.w, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -133,75 +137,72 @@ class _FacialRecognitionPageState extends State<FacialRecognitionPage>
 
                   const Spacer(),
 
-                  // More symmetrical spacing above FAB
+                  // -------- FAB-STYLE START BUTTON (UNCHANGED) --------
                   Padding(
-                    padding: EdgeInsets.only(bottom: 110.h), // REDUCED SPACE
-                    child: FRMainButton(
-                      label: "Start Scanning",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const FRScanPage()),
-                        );
-                      },
+                    padding: EdgeInsets.only(bottom: 107.h),
+                    child: Material(
+                      elevation: 8,
+                      borderRadius: BorderRadius.circular(30.r),
+                      shadowColor: colors.appColor.withOpacity(0.4),
+                      child: FRMainButton(
+                        label: "Start Scanning",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const FRScanPage(),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
+        ),
 
-          // --- FULL SCREEN BLUR + DIM OVERLAY ---
-          AnimatedBuilder(
-            animation: _fabAnimController,
-            builder: (context, child) {
-              if (_fabAnimController.value <= 0.01) {
-                return const SizedBox.shrink();
-              }
-              return Positioned.fill(
-                top: -40, // OVERSCAN FIX → no gaps
-                bottom: -40,
-                left: -40,
-                right: -40,
-                child: GestureDetector(
-                  onTap: _closeFabMenu,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: 8 * _fabAnimController.value,
-                      sigmaY: 8 * _fabAnimController.value,
-                    ),
-                    child: Container(
-                      color: Colors.black.withOpacity(
-                        0.35 * _fabAnimController.value,
-                      ),
-                    ),
+        // ================= DARK OVERLAY =================
+        AnimatedBuilder(
+          animation: _fabAnimController,
+          builder: (context, child) {
+            if (_fabAnimController.value == 0) {
+              return const SizedBox.shrink();
+            }
+            return Positioned.fill(
+              child: GestureDetector(
+                onTap: _closeFabMenu,
+                child: Container(
+                  color: Colors.black.withOpacity(
+                    0.45 * _fabAnimController.value,
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
+        ),
 
-          // --- EXPANDABLE FAB ---
-          Positioned(
-            bottom: 30.h, // Lift FAB slightly
-            right: 20.w,
-            child: _ExpandableFAB(
-              animationController: _fabAnimController,
-              onMainButtonTap: _toggleFabMenu,
-              onAddPersonTap: _onAddPersonTap,
-              onRemovePersonTap: _onRemovePersonTap,
-              onEditDetailsTap: _onEditDetailsTap,
-            ),
+        // ================= EXPANDABLE FAB =================
+        Positioned(
+          bottom: 30.h,
+          right: 20.w,
+          child: _ExpandableFAB(
+            animationController: _fabAnimController,
+            onMainButtonTap: _toggleFabMenu,
+            onAddPersonTap: _onAddPersonTap,
+            onRemovePersonTap: _onRemovePersonTap,
+            onEditDetailsTap: _onEditDetailsTap,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-// -------------------------------------------------------------
-// EXPANDABLE FAB
-// -------------------------------------------------------------
+// =============================================================
+// EXPANDABLE FAB (FIXED CIRCULAR FAB)
+// =============================================================
 
 class _ExpandableFAB extends StatelessWidget {
   final AnimationController animationController;
@@ -220,15 +221,14 @@ class _ExpandableFAB extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double d1 = 75; // Add person
-    const double d2 = 145; // Remove
-    const double d3 = 215; // Edit
+    const double d1 = 75;
+    const double d2 = 145;
+    const double d3 = 215;
 
     return SizedBox(
       width: 250.w,
       height: 240.h,
       child: Stack(
-        clipBehavior: Clip.none,
         alignment: Alignment.bottomRight,
         children: [
           _AnimatedOption(
@@ -252,22 +252,33 @@ class _ExpandableFAB extends StatelessWidget {
             icon: Icons.person_add,
             onTap: onAddPersonTap,
           ),
-          FloatingActionButton(
-            backgroundColor: colors.appColor,
-            shape: const CircleBorder(),
-            onPressed: onMainButtonTap,
-            child: AnimatedBuilder(
-              animation: animationController,
-              builder: (context, child) {
-                return Transform.rotate(
-                  angle: animationController.value * 3.14159,
-                  child: Icon(
-                    animationController.value > 0.1 ? Icons.close : Icons.add,
-                    color: Colors.white,
-                    size: 28.sp,
-                  ),
-                );
-              },
+
+          // -------- PERFECT CIRCULAR FAB --------
+          Align(
+            alignment: Alignment.bottomRight,
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: FloatingActionButton(
+                backgroundColor: colors.appColor,
+                shape: const CircleBorder(),
+                onPressed: onMainButtonTap,
+                child: AnimatedBuilder(
+                  animation: animationController,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: animationController.value * 3.14159,
+                      child: Icon(
+                        animationController.value > 0.1
+                            ? Icons.close
+                            : Icons.add,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ],
@@ -276,9 +287,9 @@ class _ExpandableFAB extends StatelessWidget {
   }
 }
 
-// -------------------------------------------------------------
-// ANIMATED MENU OPTION
-// -------------------------------------------------------------
+// =============================================================
+// FAB MENU OPTION
+// =============================================================
 
 class _AnimatedOption extends StatelessWidget {
   final AnimationController controller;
