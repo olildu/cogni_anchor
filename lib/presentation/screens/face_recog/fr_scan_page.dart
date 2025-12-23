@@ -1,15 +1,17 @@
+import 'dart:async';
 import 'dart:io';
-import 'package:camera/camera.dart';
-import 'package:cogni_anchor/logic/face_recog/face_recog_bloc.dart';
-// Removed unused import: import 'package:cogni_anchor/main.dart'; 
-import 'package:cogni_anchor/presentation/constants/colors.dart' as colors;
+import 'package:cogni_anchor/data/services/api_service.dart';
+import 'package:cogni_anchor/data/services/camera_store.dart';
+import 'package:cogni_anchor/data/services/embedding_service.dart';
+import 'package:cogni_anchor/data/services/face_crop_service.dart';
+import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_result_found_page.dart';
 import 'package:cogni_anchor/presentation/screens/face_recog/fr_result_not_found_page.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
+import 'package:camera/camera.dart';
 
 class FRScanPage extends StatefulWidget {
   const FRScanPage({super.key});
@@ -21,48 +23,113 @@ class FRScanPage extends StatefulWidget {
 class _FRScanPageState extends State<FRScanPage> {
   late CameraController _cameraController;
   bool _isCameraInitialized = false;
+  CameraLensDirection _currentLens = CameraLensDirection.front;
+  bool _foundFace = false;
+  Timer? _scanTimeoutTimer;
 
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
+    _initializeCamera(_currentLens);
   }
 
-  Future<void> _initializeCamera() async {
-    // FIX: Renamed local variable to 'camerasList' and ensure await is used.
-    final List<CameraDescription> camerasList = await availableCameras();
-
-    final frontCamera = camerasList.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front, 
-      orElse: () => camerasList.first
+  Future<void> _initializeCamera(CameraLensDirection lens) async {
+    final camera = cameras.firstWhere(
+      (cam) => cam.lensDirection == lens,
+      orElse: () => cameras.first,
     );
 
-    _cameraController = CameraController(frontCamera, ResolutionPreset.medium, enableAudio: false);
+    _cameraController = CameraController(
+      camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
 
     try {
       await _cameraController.initialize();
       if (mounted) {
-        setState(() => _isCameraInitialized = true);
-        _captureAndScan();
+        setState(() {
+          _isCameraInitialized = true;
+        });
+        _startScanWindow();
       }
     } catch (e) {
-      if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()));
+      debugPrint("Camera init error: $e");
+      _goToNotFound();
     }
   }
 
-  Future<void> _captureAndScan() async {
+  void _startScanWindow() {
+    _foundFace = false;
+    _scanFaceLoop();
+    _scanTimeoutTimer?.cancel();
+    _scanTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (!_foundFace && mounted) {
+        _goToNotFound();
+      }
+    });
+  }
+
+  Future<void> _scanFaceLoop() async {
+    while (!_foundFace && mounted) {
+      await _scanFaceOnce();
+      await Future.delayed(const Duration(milliseconds: 800));
+    }
+  }
+
+  Future<void> _scanFaceOnce() async {
     try {
       final xFile = await _cameraController.takePicture();
-      final file = File(xFile.path);
-      // 2. Dispatch ScanFace event
-      if (mounted) context.read<FaceRecogBloc>().add(ScanFace(file));
+      final imageFile = File(xFile.path);
+      final croppedFace = await FaceCropService.instance.detectAndCropFace(imageFile);
+
+      if (croppedFace == null) return;
+
+      final faceBytes = await croppedFace.readAsBytes();
+      final embedding = await EmbeddingService.instance.getEmbedding(faceBytes);
+      final result = await ApiService.scanPerson(embedding: embedding);
+
+      if (result['matched'] == true && mounted) {
+        _foundFace = true;
+        _scanTimeoutTimer?.cancel();
+        final person = result['person'] as Map<String, dynamic>;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => FRResultFoundPage(person: person)),
+        );
+      }
     } catch (e) {
-      // Handle error
+      debugPrint("Scan attempt error: $e");
     }
+  }
+
+  void _goToNotFound() {
+    _scanTimeoutTimer?.cancel();
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()),
+      );
+    }
+  }
+
+  Future<void> _flipCamera() async {
+    _scanTimeoutTimer?.cancel();
+    await _cameraController.dispose();
+
+    setState(() {
+      _isCameraInitialized = false;
+      _currentLens = _currentLens == CameraLensDirection.front
+          ? CameraLensDirection.back
+          : CameraLensDirection.front;
+    });
+
+    await _initializeCamera(_currentLens);
   }
 
   @override
   void dispose() {
+    _scanTimeoutTimer?.cancel();
     _cameraController.dispose();
     super.dispose();
   }
@@ -72,46 +139,83 @@ class _FRScanPageState extends State<FRScanPage> {
     if (!_isCameraInitialized) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
 
-    return BlocListener<FaceRecogBloc, FaceRecogState>(
-      listener: (context, state) {
-        if (state is ScanSuccess) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => FRResultFoundPage(person: state.person)));
-        } else if (state is ScanNoMatch || state is ScanError) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FRResultNotFoundPage()));
-        }
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            Center(child: CameraPreview(_cameraController)),
+    final size = MediaQuery.of(context).size;
+    var scale = size.aspectRatio * _cameraController.value.aspectRatio;
+    if (scale < 1) scale = 1 / scale;
 
-            // ... [Keep your existing UI overlay: "Trouble remembering...", "Scanning face..." text, etc.] ...
-            Align(
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Example UI
-                  Container(
-                    padding: EdgeInsets.all(10),
-                    color: Colors.white,
-                    child: BlocBuilder<FaceRecogBloc, FaceRecogState>(
-                      builder: (context, state) {
-                        if (state is FaceRecogLoading) return Text(state.message);
-                        return Text("Align face...");
-                      },
-                    ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Transform.scale(
+            scale: scale,
+            child: Center(child: CameraPreview(_cameraController)),
+          ),
+          Positioned(
+            top: 60.h,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: AppText("Trouble remembering a person?", color: Colors.white, fontSize: 18.sp, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Align(
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 280.w,
+                  height: 350.h,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.primary, width: 3),
+                    borderRadius: BorderRadius.circular(20.r),
                   ),
-                ],
+                ),
+                Gap(20.h),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 15.h),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16.r),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.camera, color: AppColors.primary),
+                      Gap(5.h),
+                      AppText("Scanning face...", fontSize: 12.sp, color: AppColors.primary),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 40.h,
+            right: 20.w,
+            child: GestureDetector(
+              onTap: _flipCamera,
+              child: Container(
+                width: 50.w,
+                height: 50.w,
+                decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                child: const Icon(Icons.cameraswitch, color: Colors.white),
               ),
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            top: 50.h,
+            left: 20.w,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
       ),
     );
   }

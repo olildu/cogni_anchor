@@ -9,10 +9,6 @@ class AppText extends StatelessWidget {
   final TextAlign? textAlign;
   final int? maxLines;
   final TextOverflow? overflow;
-  final double? letterSpacing;
-  final TextDecoration? decoration;
-  final bool? softWrap;
-  final FontStyle? fontStyle;
 
   const AppText(
     this.text, {
@@ -23,10 +19,6 @@ class AppText extends StatelessWidget {
     this.textAlign,
     this.maxLines,
     this.overflow,
-    this.letterSpacing,
-    this.decoration,
-    this.softWrap,
-    this.fontStyle,
   });
 
   @override
@@ -36,15 +28,10 @@ class AppText extends StatelessWidget {
       textAlign: textAlign,
       maxLines: maxLines,
       overflow: overflow,
-      softWrap: softWrap,
-      style: TextStyle(
+      style: GoogleFonts.poppins( 
         color: color,
         fontSize: fontSize,
         fontWeight: fontWeight,
-        letterSpacing: letterSpacing,
-        decoration: decoration,
-        fontFamily: GoogleFonts.poppins().fontFamily,
-        fontStyle: fontStyle,
       ),
     );
   }

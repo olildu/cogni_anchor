@@ -12,7 +12,7 @@ class ReminderChildCardWidget extends StatelessWidget {
     required this.title,
     required this.date,
     required this.time,
-    required this.color, // your theme/appColor
+    required this.color, 
   });
 
   @override
@@ -34,7 +34,6 @@ class ReminderChildCardWidget extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left circular icon
           Container(
             width: 40.w,
             height: 40.w,
@@ -48,10 +47,7 @@ class ReminderChildCardWidget extends StatelessWidget {
               size: 22.sp,
             ),
           ),
-
           SizedBox(width: 12.w),
-
-          // Content
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,9 +69,7 @@ class ReminderChildCardWidget extends StatelessWidget {
                       date,
                       style: TextStyle(fontSize: 13.sp, color: Colors.grey),
                     ),
-
                     SizedBox(width: 10.w),
-
                     Icon(Icons.access_time, size: 16.sp, color: Colors.grey),
                     SizedBox(width: 4.w),
                     Text(

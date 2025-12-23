@@ -1,19 +1,20 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:cogni_anchor/logic/face_recog/face_recog_bloc.dart';
-// Removed unused import: import 'package:cogni_anchor/main.dart';
-import 'package:cogni_anchor/presentation/constants/colors.dart' as colors;
+import 'package:cogni_anchor/data/services/api_service.dart';
+import 'package:cogni_anchor/data/services/camera_store.dart';
+import 'package:cogni_anchor/data/services/embedding_service.dart';
+import 'package:cogni_anchor/data/services/face_crop_service.dart';
+import 'package:cogni_anchor/presentation/constants/theme_constants.dart';
 import 'package:cogni_anchor/presentation/widgets/common/app_text.dart';
 import 'package:cogni_anchor/presentation/widgets/face_recog/fr_components.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gap/gap.dart';
+import 'package:image_picker/image_picker.dart';
 
 class FRAddPersonPage extends StatefulWidget {
   final File? initialImageFile;
   const FRAddPersonPage({super.key, this.initialImageFile});
-
   @override
   State<FRAddPersonPage> createState() => _FRAddPersonPageState();
 }
@@ -27,212 +28,148 @@ class _FRAddPersonPageState extends State<FRAddPersonPage> {
 
   late CameraController _cameraController;
   bool _isCameraInitialized = false;
+  bool _isSaving = false;
   File? _capturedImage;
+  CameraDescription? _currentCamera;
+  bool _isFrontCamera = true;
 
   @override
   void initState() {
     super.initState();
     _capturedImage = widget.initialImageFile;
-    if (_capturedImage == null) {
-      _initializeCamera();
-    }
+    if (_capturedImage == null) _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
-    // FIX: Renamed local variable to 'camerasList' and ensure await is used.
-    final List<CameraDescription> camerasList = await availableCameras();
-
-    // Find the front camera or fallback to the first camera
-    final frontCamera = camerasList.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => camerasList.first
-    );
-
-    _cameraController = CameraController(frontCamera, ResolutionPreset.medium, enableAudio: false);
-
+    _currentCamera = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front, orElse: () => cameras.first);
+    _cameraController = CameraController(_currentCamera!, ResolutionPreset.medium, enableAudio: false);
     try {
       await _cameraController.initialize();
-      if (mounted) {
-        setState(() {
-          _isCameraInitialized = true;
-        });
-      }
-    } catch (e) {
-      debugPrint("Error initializing camera: $e");
-    }
+      if (mounted) setState(() => _isCameraInitialized = true);
+    } catch (e) { debugPrint("Camera error: $e"); }
+  }
+
+  Future<void> _flipCamera() async {
+    _isFrontCamera = !_isFrontCamera;
+    _currentCamera = cameras.firstWhere((c) => c.lensDirection == (_isFrontCamera ? CameraLensDirection.front : CameraLensDirection.back), orElse: () => cameras.first);
+    await _cameraController.dispose();
+    _cameraController = CameraController(_currentCamera!, ResolutionPreset.medium, enableAudio: false);
+    try {
+      await _cameraController.initialize();
+      if (mounted) setState(() {});
+    } catch (e) { debugPrint("Flip error: $e"); }
+  }
+
+  Future<void> _pickFromGallery() async {
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (img != null) setState(() => _capturedImage = File(img.path));
   }
 
   Future<void> _captureImage() async {
-    // If an image exists, treat the tap as a Recapture (clear the current image)
-    if (_capturedImage != null) {
-      setState(() => _capturedImage = null);
-      return;
-    }
-
+    if (_capturedImage != null) { setState(() => _capturedImage = null); return; }
     if (!_isCameraInitialized) return;
-
     try {
       final xFile = await _cameraController.takePicture();
-      setState(() {
-        _capturedImage = File(xFile.path);
-      });
-    } catch (e) {
-      debugPrint("Error capturing image: $e");
-    }
+      setState(() => _capturedImage = File(xFile.path));
+    } catch (e) { debugPrint("Capture error: $e"); }
   }
 
-  void _enrollPerson() {
-    if (_nameController.text.isEmpty || _relationshipController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Name and Relationship are required.")));
+  Future<void> _enrollPerson() async {
+    if (_capturedImage == null || _nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Image and Name required")));
       return;
     }
-    if (_capturedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("A face image must be captured.")));
-      return;
-    }
-
-    // Dispatch EnrollPerson event (BLoC connection preserved)
-    context.read<FaceRecogBloc>().add(
-      EnrollPerson(
-        name: _nameController.text,
-        relationship: _relationshipController.text,
-        occupation: _occupationController.text,
-        age: _ageController.text,
-        notes: _notesController.text,
-        imageFile: _capturedImage!,
-      ),
-    );
+    setState(() => _isSaving = true);
+    try {
+      final cropped = await FaceCropService.instance.detectAndCropFace(_capturedImage!);
+      if (cropped == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No face detected")));
+        return;
+      }
+      final bytes = await cropped.readAsBytes();
+      final embedding = await EmbeddingService.instance.getEmbedding(bytes);
+      final success = await ApiService.addPerson(
+        imageBytes: bytes,
+        name: _nameController.text.trim(),
+        relationship: _relationshipController.text.trim(),
+        occupation: _occupationController.text.trim(),
+        age: int.tryParse(_ageController.text.trim()) ?? 0,
+        notes: _notesController.text.trim(),
+        embedding: embedding,
+      );
+      if (success && mounted) Navigator.pop(context);
+    } catch (e) { debugPrint("Enroll error: $e"); }
+    finally { if (mounted) setState(() => _isSaving = false); }
   }
 
   @override
   void dispose() {
-    if (_isCameraInitialized) {
-      _cameraController.dispose();
-    }
-    _nameController.dispose();
-    _relationshipController.dispose();
-    _occupationController.dispose();
-    _ageController.dispose();
-    _notesController.dispose();
+    if (_isCameraInitialized) _cameraController.dispose();
+    _nameController.dispose(); _relationshipController.dispose(); _occupationController.dispose(); _ageController.dispose(); _notesController.dispose();
     super.dispose();
   }
 
-  Widget _buildTextField(String hint, TextEditingController controller, {int maxLines = 1}) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        hintText: hint,
-        contentPadding: EdgeInsets.symmetric(horizontal: 15.w, vertical: 15.h),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: BorderSide(color: colors.appColor, width: 2),
+  @override
+  Widget build(BuildContext context) {
+    final showCamera = _capturedImage == null && _isCameraInitialized;
+    return Scaffold(
+      appBar: AppBar(
+        title: AppText("Add New Person", color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 18.sp),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.primary),
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(20.w),
+        child: Column(
+          children: [
+            Container(
+              height: 400.h,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(16.r), border: Border.all(color: AppColors.primary, width: 2)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16.r),
+                child: _capturedImage != null
+                    ? Image.file(_capturedImage!, fit: BoxFit.cover)
+                    : showCamera ? CameraPreview(_cameraController) : const Center(child: Text("Initializing...")),
+              ),
+            ),
+            Gap(12.h),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _smallButton(Icons.cameraswitch, _flipCamera),
+                _smallButton(Icons.photo_library, _pickFromGallery),
+                _smallButton(_capturedImage != null ? Icons.refresh : Icons.camera, _captureImage),
+              ],
+            ),
+            Gap(25.h),
+            AppText("Person Details", fontSize: 16.sp, fontWeight: FontWeight.w600),
+            Gap(15.h),
+            _buildTF("Full Name", _nameController),
+            Gap(15.h),
+            _buildTF("Relationship", _relationshipController),
+            Gap(15.h),
+            _buildTF("Occupation", _occupationController),
+            Gap(15.h),
+            _buildTF("Age", _ageController),
+            Gap(15.h),
+            _buildTF("Notes", _notesController, maxLines: 3),
+            Gap(40.h),
+            _isSaving ? const CircularProgressIndicator() : FRMainButton(label: "Save and Enroll", onTap: _enrollPerson),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildImageCaptureSection() {
-    final showCameraView = _capturedImage == null && _isCameraInitialized;
-    double aspectRatio = _isCameraInitialized ? _cameraController.value.aspectRatio : 1.0;
-
-    return Column(
-      children: [
-        Container(
-          height: 400.h,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(color: colors.appColor, width: 2),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16.r),
-            child: _capturedImage != null
-                ? Image.file(_capturedImage!, fit: BoxFit.cover)
-                : showCameraView
-                ? SizedBox(
-                    child: AspectRatio(aspectRatio: aspectRatio, child: CameraPreview(_cameraController)),
-                  )
-                : Center(child: AppText("Initializing Camera...", color: Colors.grey.shade600)),
-          ),
-        ),
-        Gap(15.h),
-        SizedBox(
-          width: 150.w,
-          child: ElevatedButton(
-            onPressed: (_capturedImage != null || _isCameraInitialized) ? _captureImage : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _capturedImage != null ? Colors.redAccent : colors.appColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30.r)),
-              elevation: 0,
-            ),
-            child: AppText(_capturedImage != null ? "Recapture" : "Capture Face", color: Colors.white, fontSize: 14.sp, fontWeight: FontWeight.w600),
-          ),
-        ),
-      ],
+  Widget _buildTF(String hint, TextEditingController c, {int maxLines = 1}) {
+    return TextField(
+      controller: c, maxLines: maxLines,
+      decoration: InputDecoration(hintText: hint, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r))),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return BlocConsumer<FaceRecogBloc, FaceRecogState>(
-      listener: (context, state) {
-        if (state is EnrollmentSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${state.name} enrolled!")));
-          Navigator.pop(context);
-        } else if (state is EnrollmentError) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message)));
-        }
-      },
-      builder: (context, state) {
-        bool isLoading = state is FaceRecogLoading;
-
-        return Scaffold(
-          appBar: AppBar(
-            title: AppText("Add New Person", color: colors.appColor, fontWeight: FontWeight.w600, fontSize: 18.sp),
-            backgroundColor: Colors.white,
-            elevation: 0,
-            iconTheme: IconThemeData(color: colors.appColor),
-          ),
-          body: SingleChildScrollView(
-            padding: EdgeInsets.all(20.w),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildImageCaptureSection(),
-                Gap(25.h),
-
-                AppText("Person Details", fontSize: 16.sp, fontWeight: FontWeight.w600),
-                Gap(15.h),
-
-                _buildTextField("Full Name", _nameController),
-                Gap(15.h),
-                _buildTextField("Relationship (e.g., Father, Neighbor)", _relationshipController),
-                Gap(15.h),
-                _buildTextField("Occupation", _occupationController),
-                Gap(15.h),
-                _buildTextField("Age", _ageController),
-                Gap(15.h),
-                _buildTextField("Notes", _notesController, maxLines: 3),
-
-                Gap(40.h),
-
-                // Button tied to BLoC loading state
-                isLoading ? const Center(child: CircularProgressIndicator()) : FRMainButton(label: "Save and Enroll", onTap: _enrollPerson),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  Widget _smallButton(IconData icon, VoidCallback onTap) {
+    return InkWell(onTap: onTap, child: CircleAvatar(radius: 25, backgroundColor: AppColors.primary, child: Icon(icon, color: Colors.white)));
   }
 }
